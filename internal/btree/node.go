@@ -313,3 +313,35 @@ func nodeReplaceKidN(
 		old.nkeys()-(idx+1),
 	)
 }
+
+func nodeSplit2(left BNode, right BNode, old BNode) {
+	//code omitted
+}
+
+func nodeSplit3(old BNode) (uint16, [3]BNode) {
+	if old.nbytes() <= BTREE_PAGE_SIZE {
+		old = old[:BTREE_PAGE_SIZE]
+		return 1, [3]BNode{old}
+	}
+
+	left := BNode(make([]byte, 2*BTREE_PAGE_SIZE))
+	right := BNode(make([]byte, BTREE_PAGE_SIZE))
+
+	nodeSplit2(left, right, old)
+
+	if left.nbytes() <= BTREE_PAGE_SIZE {
+		left = left[:BTREE_PAGE_SIZE]
+		return 2, [3]BNode{left, right}
+	}
+
+	leftleft := BNode(make([]byte, BTREE_PAGE_SIZE))
+	middle := BNode(make([]byte, BTREE_PAGE_SIZE))
+
+	nodeSplit2(leftleft, middle, left)
+
+	if leftleft.nbytes() > BTREE_PAGE_SIZE {
+		panic("leftleft node exceeds page size")
+	}
+
+	return 3, [3]BNode{leftleft, middle, right}
+}
