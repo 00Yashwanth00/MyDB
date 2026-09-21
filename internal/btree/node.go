@@ -316,6 +316,51 @@ func nodeReplaceKidN(
 
 func nodeSplit2(left BNode, right BNode, old BNode) {
 	//code omitted
+	if old.nkeys() < 2 {
+		panic("cannot split a node with fewer than 2 keys")
+	}
+
+	nleft := old.nkeys() / 2
+
+	leftBytes := func() uint16 {
+		return HEADER +
+			8*nleft +
+			2*nleft +
+			old.getOffset(nleft)
+	}
+
+	for leftBytes() > BTREE_PAGE_SIZE {
+		nleft--
+	}
+
+	if nleft < 1 {
+		panic("left node would have no keys")
+	}
+
+	rightBytes := func() uint16 {
+		return old.nbytes() - leftBytes() + HEADER
+	}
+
+	for rightBytes() > BTREE_PAGE_SIZE {
+		nleft++
+	}
+
+	if nleft >= old.nkeys() {
+		panic("right node would have no keys")
+	}
+
+	nright := old.nkeys() - nleft
+
+	left.setHeader(old.btype(), nleft)
+	right.setHeader(old.btype(), nright)
+
+	nodeAppendRange(left, old, 0, 0, nleft)
+
+	nodeAppendRange(right, old, 0, nleft, nright)
+
+	if right.nbytes() > BTREE_PAGE_SIZE {
+		panic("right node exceeds page size")
+	}
 }
 
 func nodeSplit3(old BNode) (uint16, [3]BNode) {
