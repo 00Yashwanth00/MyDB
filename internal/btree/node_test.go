@@ -233,3 +233,90 @@ func TestNodeSplit3(t *testing.T) {
 		t.Fatal("keys were lost during 3-way split")
 	}
 }
+
+func TestLeafUpdate(t *testing.T) {
+	// Create the old leaf node.
+	old := BNode(make([]byte, BTREE_PAGE_SIZE))
+
+	old.setHeader(BNODE_LEAF, 3)
+
+	nodeAppendKV(
+		old,
+		0,
+		0,
+		[]byte("apple"),
+		[]byte("red"),
+	)
+
+	nodeAppendKV(
+		old,
+		1,
+		0,
+		[]byte("banana"),
+		[]byte("yellow"),
+	)
+
+	nodeAppendKV(
+		old,
+		2,
+		0,
+		[]byte("cherry"),
+		[]byte("red"),
+	)
+
+	// Create the new node.
+	new := BNode(make([]byte, 2*BTREE_PAGE_SIZE))
+
+	// Update "banana".
+	leafUpdate(
+		new,
+		old,
+		1,
+		[]byte("banana"),
+		[]byte("green"),
+	)
+
+	// The number of keys should remain unchanged.
+	if new.nkeys() != old.nkeys() {
+		t.Fatalf(
+			"key count changed: old=%d new=%d",
+			old.nkeys(),
+			new.nkeys(),
+		)
+	}
+
+	// Check key/value 0.
+	if string(new.getKey(0)) != "apple" {
+		t.Fatalf("unexpected key 0: %s", new.getKey(0))
+	}
+
+	if string(new.getVal(0)) != "red" {
+		t.Fatalf("unexpected value 0: %s", new.getVal(0))
+	}
+
+	// Check updated key/value.
+	if string(new.getKey(1)) != "banana" {
+		t.Fatalf("unexpected key 1: %s", new.getKey(1))
+	}
+
+	if string(new.getVal(1)) != "green" {
+		t.Fatalf("unexpected value 1: %s", new.getVal(1))
+	}
+
+	// Check key/value 2.
+	if string(new.getKey(2)) != "cherry" {
+		t.Fatalf("unexpected key 2: %s", new.getKey(2))
+	}
+
+	if string(new.getVal(2)) != "red" {
+		t.Fatalf("unexpected value 2: %s", new.getVal(2))
+	}
+
+	// Verify that the old node was not modified.
+	if string(old.getVal(1)) != "yellow" {
+		t.Fatalf(
+			"old node was modified: expected yellow, got %s",
+			old.getVal(1),
+		)
+	}
+}

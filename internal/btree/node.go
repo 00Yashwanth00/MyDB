@@ -390,3 +390,96 @@ func nodeSplit3(old BNode) (uint16, [3]BNode) {
 
 	return 3, [3]BNode{leftleft, middle, right}
 }
+
+func leafUpdate(
+	new BNode,
+	old BNode,
+	idx uint16,
+	key []byte,
+	val []byte,
+) {
+	new.setHeader(BNODE_LEAF, old.nkeys())
+
+	nodeAppendRange(
+		new,
+		old,
+		0,
+		0,
+		idx,
+	)
+
+	nodeAppendKV(
+		new,
+		idx,
+		0,
+		key,
+		val,
+	)
+
+	nodeAppendRange(
+		new,
+		old,
+		idx+1,
+		idx+1,
+		old.nkeys()-(idx+1),
+	)
+}
+
+func treeInsert(
+	tree *BTree,
+	node BNode,
+	key []byte,
+	val []byte,
+) BNode {
+
+	new := BNode(make([]byte, 2*BTREE_PAGE_SIZE))
+
+	idx := nodeLookupLE(node, key)
+
+	switch node.btype() {
+	case BNODE_LEAF:
+		if bytes.Equal(key, node.getKey(idx)) {
+			leafUpdate(new, node, idx, key, val)
+		} else {
+			leafInsert(new, node, idx+1, key, val)
+		}
+
+	case BNODE_NODE:
+		nodeInsert(tree, new, node, idx, key, val)
+
+	default:
+		panic("bad node type")
+	}
+
+	return new
+}
+
+func nodeInsert(
+	tree *BTree,
+	new BNode,
+	node BNode,
+	idx uint16,
+	key []byte,
+	val []byte,
+) {
+	kptr := node.getPtr(idx)
+
+	knode := treeInsert(
+		tree,
+		tree.get(kptr),
+		key,
+		val,
+	)
+
+	nsplit, split := nodeSplit3(knode)
+
+	tree.del(kptr)
+
+	nodeReplaceKidN(
+		tree,
+		new,
+		node,
+		idx,
+		split[:nsplit]...,
+	)
+}
