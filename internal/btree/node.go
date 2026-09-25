@@ -587,3 +587,138 @@ func shouldMerge(
 
 	return 0, BNode{}
 }
+
+func treeDelete(
+	tree *BTree,
+	node BNode,
+	key []byte,
+) BNode {
+
+	idx := nodeLookupLE(node, key)
+
+	switch node.btype() {
+	case BNODE_LEAF:
+		if !bytes.Equal(node.getKey(idx), key) {
+			return BNode{}
+		}
+
+		new := BNode(
+			make([]byte, BTREE_PAGE_SIZE),
+		)
+
+		leafDelete(
+			new,
+			node,
+			idx,
+		)
+
+		return new
+	case BNODE_NODE:
+
+		return nodeDelete(
+			tree,
+			node,
+			idx,
+			key,
+		)
+
+	default:
+		panic("bad node!")
+	}
+
+}
+
+func nodeDelete(
+	tree *BTree,
+	node BNode,
+	idx uint16,
+	key []byte,
+) BNode {
+
+	// Find the child
+	kptr := node.getPtr(idx)
+
+	// Recursively delete from child
+	updated := treeDelete(
+		tree,
+		tree.get(kptr),
+		key,
+	)
+
+	// Key wasn't found
+	if len(updated) == 0 {
+		return BNode{}
+	}
+
+	// Old child is no longer needed
+	tree.del(kptr)
+
+	// New parent node
+	new := BNode(make([]byte, BTREE_PAGE_SIZE))
+
+	// Decide whether to merge
+	mergeDir, sibling :=
+		shouldMerge(tree, node, idx, updated)
+
+	switch {
+	case mergeDir < 0:
+		// Merge with left
+		merged := BNode(
+			make([]byte, BTREE_PAGE_SIZE),
+		)
+
+		nodeMerge(
+			merged,
+			sibling,
+			updated,
+		)
+
+		tree.del(node.getPtr(idx - 1))
+
+		nodeReplace2Kid(
+			new,
+			node,
+			idx-1,
+			tree.new(merged),
+			merged.getKey(0),
+		)
+
+	case mergeDir > 0:
+		// Merge with right
+		merged := BNode(
+			make([]byte, BTREE_PAGE_SIZE),
+		)
+
+		nodeMerge(
+			merged,
+			updated,
+			sibling,
+		)
+
+		tree.del(node.getPtr(idx + 1))
+
+		nodeReplace2Kid(
+			new,
+			node,
+			idx,
+			tree.new(merged),
+			merged.getKey(0),
+		)
+
+	case mergeDir == 0 && updated.nkeys() == 0:
+		// No sibling; propagate empty node upward
+		new.setHeader(BNODE_NODE, 0)
+
+	case mergeDir == 0 && updated.nkeys() > 0:
+		// No merge required
+		nodeReplaceKidN(
+			tree,
+			new,
+			node,
+			idx,
+			updated,
+		)
+	}
+
+	return new
+}
