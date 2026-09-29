@@ -71,3 +71,36 @@ func (tree *BTree) Insert(key []byte, val []byte) {
 		tree.root = tree.new(split[0])
 	}
 }
+
+// Delete removes a key from the B+ tree.
+// Returns true if the key was found and deleted, or false if the key was not found or the tree is empty.
+func (tree *BTree) Delete(key []byte) bool {
+	// Guard clause: Cannot delete from an empty tree.
+	if tree.root == 0 {
+		return false
+	}
+
+	// Recursively attempt to delete the key starting from the root node.
+	// Returns a new BNode containing the modified page data, or an empty slice if key was not found.
+	updated := treeDelete(tree, tree.get(tree.root), key)
+
+	// If treeDelete returned an empty BNode, the target key was not present in the tree.
+	if len(updated) == 0 {
+		return false
+	}
+
+	// Free/deallocate the old root page from storage (maintaining Copy-On-Write immutability).
+	tree.del(tree.root)
+
+	// Check if the modified root node still contains user keys.
+	// Note: nkeys > 1 accounts for the initial sentinel/dummy key at index 0.
+	if updated.nkeys() > 1 {
+		// Persist the updated root page to storage and update the tree's root pointer.
+		tree.root = tree.new(updated)
+	} else {
+		// The root page lost its last user key; reset root pointer to 0 (tree is now empty).
+		tree.root = 0
+	}
+
+	return true
+}
