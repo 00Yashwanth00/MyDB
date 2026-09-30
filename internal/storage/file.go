@@ -81,3 +81,19 @@ func SaveData2(path string, data []byte) error {
 	// On POSIX systems, this rename operation replaces the destination file atomically, ensuring no concurrent reader ever encounters a partially written file.
 	return os.Rename(tmp, path)
 }
+
+// syncDir flushes directory metadata changes (such as file creations,
+// deletions, or renames) to disk to ensure durability.
+func syncDir(path string) error {
+	// Open a file handle for the directory path.
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	// Ensure the directory file descriptor is closed when the function exits.
+	defer dir.Close()
+
+	// Issue an fsync system call on the directory descriptor to flush
+	// any pending directory entry modifications to durable storage.
+	return dir.Sync()
+}
